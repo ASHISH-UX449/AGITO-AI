@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <script src="https://www.gstatic.com/firebasejs/10.3.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.3.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.3.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.3.0/firebase-storage.js"></script>
+</head>
+<body>
+  <h1>Admin Panel</h1>
+
+  <div id="login-section">
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="loginEmail()">Login</button>
+    <button onclick="loginGoogle()">Login with Google</button>
+  </div>
+
+  <div id="admin-section" style="display:none;">
+    <input type="file" id="bannerFile">
+    <input type="text" id="bannerTitle" placeholder="Banner Title">
+    <button onclick="uploadBanner()">Upload</button>
+    <ul id="bannerList"></ul>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    function loginEmail() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => showAdminPanel())
+        .catch(err => alert(err.message));
+    }
+
+    function loginGoogle() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).then(() => showAdminPanel()).catch(err => alert(err.message));
+    }
+
+    function showAdminPanel() {
+      document.getElementById("login-section").style.display = "none";
+      document.getElementById("admin-section").style.display = "block";
+      loadBanners();
+    }
+
+    function uploadBanner() {
+      const file = document.getElementById("bannerFile").files[0];
+      const title = document.getElementById("bannerTitle").value;
+      if(!file || !title) return alert("Select file and title");
+
+      const storageRef = storage.ref("banners/" + file.name);
+      storageRef.put(file).then(snapshot => {
+        snapshot.ref.getDownloadURL().then(url => {
+          db.collection("banners").add({ title, url, timestamp: Date.now() }).then(() => {
+            loadBanners();
+          });
+        });
+      });
+    }
+
+    function loadBanners() {
+      db.collection("banners").orderBy("timestamp","desc").get().then(snapshot => {
+        const list = document.getElementById("bannerList");
+        list.innerHTML = "";
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const li = document.createElement("li");
+          li.innerHTML = `${data.title} <img src="${data.url}" width="100"> <button onclick="deleteBanner('${doc.id}')">Delete</button>`;
+          list.appendChild(li);
+        });
+      });
+    }
+
+    function deleteBanner(id) {
+      db.collection("banners").doc(id).delete().then(() => loadBanners());
+    }
+
+    auth.onAuthStateChanged(user => { if(user) showAdminPanel(); });
+
+    window.loginEmail = loginEmail;
+    window.loginGoogle = loginGoogle;
+    window.uploadBanner = uploadBanner;
+    window.deleteBanner = deleteBanner;
+  </script>
+</body>
+</html>
